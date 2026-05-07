@@ -1,0 +1,185 @@
+@import "tailwindcss";
+
+@theme {
+  --color-background: oklch(0.985 0.002 260);
+  --color-foreground: oklch(0.15 0.02 260);
+  --color-muted: oklch(0.95 0.005 260);
+  --color-muted-foreground: oklch(0.45 0.02 260);
+  --color-card: oklch(1 0 0);
+  --color-card-hover: oklch(0.98 0.002 260);
+  --color-border: oklch(0.88 0.01 260);
+  --color-primary: oklch(0.45 0.15 250);
+  --color-primary-foreground: oklch(0.98 0.01 260);
+  --color-success: oklch(0.5 0.15 150);
+  --color-success-light: oklch(0.95 0.05 150);
+  --color-success-foreground: oklch(0.98 0.01 260);
+  --color-danger: oklch(0.5 0.18 25);
+  --color-danger-light: oklch(0.95 0.05 25);
+  --color-danger-foreground: oklch(0.98 0.01 260);
+  --color-warning: oklch(0.6 0.12 70);
+  --color-warning-light: oklch(0.95 0.05 70);
+  --color-warning-foreground: oklch(0.15 0.02 260);
+  --color-accent: oklch(0.55 0.12 280);
+  --color-input: oklch(0.98 0.002 260);
+  --color-ring: oklch(0.45 0.15 250);
+  
+  --radius-sm: 0.375rem;
+  --radius-md: 0.5rem;
+  --radius-lg: 0.75rem;
+  
+  --font-sans: 'Inter', system-ui, -apple-system, sans-serif;
+  --font-serif: 'Georgia', 'Times New Roman', serif;
+  --font-mono: 'JetBrains Mono', 'Fira Code', monospace;
+}
+
+* {
+  border-color: var(--color-border);
+}
+
+html {
+  scroll-behavior: smooth;
+}
+
+body {
+  background: var(--color-background);
+  color: var(--color-foreground);
+  font-family: var(--font-sans);
+  -webkit-font-smoothing: antialiased;
+  -moz-osx-font-smoothing: grayscale;
+  line-height: 1.7;
+}
+
+/* Academic paper-style headings */
+h1, h2, h3 {
+  font-family: var(--font-serif);
+  font-weight: 600;
+  letter-spacing: -0.01em;
+}
+
+/* Clean card styles */
+.card {
+  background: var(--color-card);
+  border: 1px solid var(--color-border);
+  border-radius: var(--radius-lg);
+  box-shadow: 0 1px 3px rgba(0, 0, 0, 0.04), 0 1px 2px rgba(0, 0, 0, 0.02);
+}
+
+.card-elevated {
+  box-shadow: 0 4px 12px rgba(0, 0, 0, 0.06), 0 1px 3px rgba(0, 0, 0, 0.04);
+}
+
+/* Academic badge styles */
+.badge {
+  display: inline-flex;
+  align-items: center;
+  padding: 0.25rem 0.75rem;
+  font-size: 0.75rem;
+  font-weight: 500;
+  border-radius: 9999px;
+  text-transform: uppercase;
+  letter-spacing: 0.05em;
+}
+
+.badge-success {
+  background: var(--color-success-light);
+  color: var(--color-success);
+}
+
+.badge-danger {
+  background: var(--color-danger-light);
+  color: var(--color-danger);
+}
+
+.badge-primary {
+  background: oklch(0.95 0.03 250);
+  color: var(--color-primary);
+}
+
+/* Form styles */
+input[type="number"]::-webkit-inner-spin-button,
+input[type="number"]::-webkit-outer-spin-button {
+  -webkit-appearance: none;
+  margin: 0;
+}
+
+input[type="number"] {
+  -moz-appearance: textfield;
+}
+
+/* Data table styles */
+.data-row {
+  display: flex;
+  justify-content: space-between;
+  padding: 0.75rem 0;
+  border-bottom: 1px solid var(--color-border);
+}
+
+.data-row:last-child {
+  border-bottom: none;
+}
+
+/* Custom scrollbar */
+::-webkit-scrollbar {
+  width: 6px;
+  height: 6px;
+}
+
+::-webkit-scrollbar-track {
+  background: transparent;
+}
+
+::-webkit-scrollbar-thumb {
+  background: oklch(0.8 0.01 260);
+  border-radius: 3px;
+}
+
+::-webkit-scrollbar-thumb:hover {
+  background: oklch(0.7 0.01 260);
+}
+
+/* Section dividers */
+.section-divider {
+  height: 1px;
+  background: linear-gradient(90deg, transparent, var(--color-border), transparent);
+  margin: 3rem 0;
+}
+
+/* Methodology note style */
+.methodology-note {
+  font-size: 0.875rem;
+  color: var(--color-muted-foreground);
+  border-left: 3px solid var(--color-primary);
+  padding-left: 1rem;
+  margin: 1rem 0;
+}
+
+/* Impact bar styles */
+.impact-bar {
+  height: 8px;
+  border-radius: 4px;
+  background: var(--color-muted);
+  overflow: hidden;
+}
+
+.impact-bar-fill {
+  height: 100%;
+  border-radius: 4px;
+  transition: width 0.6s ease-out;
+}
+
+/* Print styles for academic output */
+@media print {
+  body {
+    font-size: 11pt;
+    line-height: 1.5;
+  }
+  
+  .no-print {
+    display: none;
+  }
+  
+  .card {
+    box-shadow: none;
+    border: 1px solid #ccc;
+  }
+}
