@@ -1052,8 +1052,7 @@ export default function Home() {
         )}
       </AnimatePresence>
 
-      {/* References */}
-      <References />
+     
 
       {/* Footer */}
       <Footer />

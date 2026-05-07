@@ -1,150 +1,151 @@
-# Explainable AI Loan Approval API
+# Counterfactual and Explainable Credit Decisioning
 
-A production-ready REST API for loan approval predictions with SHAP-based explainability, built with FastAPI and XGBoost.
+A research-oriented implementation of explainable artificial intelligence (XAI) techniques for credit risk assessment. This project demonstrates how machine learning models can provide transparent, interpretable decisions in financial lending contexts—addressing the critical need for algorithmic accountability in high-stakes automated systems.
 
-## Overview
+## Motivation
 
-This API provides:
-- **Loan Approval Prediction**: XGBoost-based binary classification
-- **Explainable AI**: SHAP (SHapley Additive exPlanations) values for each prediction
-- **Feature Impacts**: Understand which factors influence approval/rejection decisions
-- **AWS Lambda Ready**: Seamless deployment to serverless infrastructure
+Credit decisioning systems increasingly rely on machine learning algorithms to evaluate loan applications. While these models often achieve superior predictive accuracy compared to traditional rule-based approaches, they introduce a fundamental challenge: opacity. When a loan application is rejected, neither the applicant nor the lending institution can easily understand why the model arrived at that conclusion.
 
-## Architecture
+This lack of transparency poses several problems. From a regulatory perspective, financial institutions must comply with fair lending laws that require explanations for adverse actions. From an ethical standpoint, individuals have a reasonable expectation to understand decisions that significantly affect their lives. And from a practical perspective, opaque models are difficult to audit, debug, and trust.
 
-```
-project/
-├── app/
-│   ├── __init__.py          # Package initialization
-│   ├── main.py               # FastAPI application & endpoints
-│   ├── schemas.py            # Pydantic request/response models
-│   ├── model_loader.py       # Model loading & caching
-│   ├── explainability.py     # SHAP explanation generation
-│   └── utils.py              # Utility functions
-├── models/
-│   └── xgb_pipeline.pkl      # Trained XGBoost pipeline
-├── requirements.txt          # Python dependencies
-├── Dockerfile                # Container configuration
-├── README.md                 # This file
-└── .gitignore               # Git ignore rules
-```
+This project addresses these challenges by combining a high-performance gradient boosting classifier with two complementary explanation techniques: SHAP values for feature attribution and DiCE counterfactuals for actionable recourse.
 
-## Tech Stack
+## Approach
 
-| Component | Technology |
-|-----------|------------|
-| Web Framework | FastAPI |
-| ML Model | XGBoost |
-| Explainability | SHAP TreeExplainer |
-| Preprocessing | scikit-learn Pipeline |
-| Serialization | joblib |
-| Data Processing | pandas, NumPy |
-| Serverless | Mangum (AWS Lambda) |
-| Container | Docker |
+### Predictive Modeling
 
-## Installation
+The classification task predicts whether a loan applicant presents a "good" or "bad" credit risk based on demographic and financial attributes. We employ XGBoost, a gradient boosting framework that constructs an ensemble of decision trees optimized through gradient descent. XGBoost was selected for its strong empirical performance on tabular data and its compatibility with tree-based explanation methods.
+
+Hyperparameter optimization was conducted using Optuna, a Bayesian optimization framework that efficiently searches the parameter space by building a probabilistic model of the objective function. This approach typically converges to high-quality configurations faster than grid search or random search alternatives.
+
+### Feature Attribution with SHAP
+
+To explain individual predictions, we compute SHAP (SHapley Additive exPlanations) values using the TreeExplainer algorithm. SHAP values originate from cooperative game theory—specifically, they represent each feature's marginal contribution to the prediction, averaged over all possible feature orderings.
+
+For a given prediction, SHAP provides:
+- **Direction of influence**: Whether each feature pushes the prediction toward approval or rejection
+- **Magnitude of influence**: How strongly each feature affects the outcome relative to others
+- **Additivity**: SHAP values sum to the difference between the model's prediction and its base rate
+
+The TreeExplainer variant exploits the structure of tree ensembles to compute exact Shapley values in polynomial time, making it practical for real-time applications.
+
+### Counterfactual Explanations with DiCE
+
+While SHAP explains why a particular decision was made, counterfactual explanations address a different question: what would need to change for the outcome to be different? This is particularly valuable for rejected applicants who want to understand how they might improve their application.
+
+We generate counterfactuals using DiCE (Diverse Counterfactual Explanations), which formulates the problem as a constrained optimization task. DiCE seeks minimal perturbations to the input features that would flip the model's prediction, while respecting several constraints:
+
+- **Actionability**: Only features that the applicant can realistically change are modified (e.g., loan amount and duration), while immutable characteristics (e.g., age and sex) remain fixed
+- **Diversity**: Multiple counterfactual suggestions are generated to provide the applicant with different viable paths forward
+- **Plausibility**: Suggested changes remain within reasonable ranges observed in the training data
+
+## Dataset
+
+The model is trained on the German Credit Dataset, a widely-used benchmark in credit scoring research originally compiled by Professor Hans Hofmann at the University of Hamburg. The dataset contains 1,000 loan applications characterized by 20 attributes spanning demographic information, financial status, and loan characteristics.
+
+| Attribute | Description | Type |
+|-----------|-------------|------|
+| Age | Applicant's age in years | Numeric |
+| Sex | Male or female | Categorical |
+| Job | Employment category (0-3 scale) | Ordinal |
+| Housing | Own, rent, or free accommodation | Categorical |
+| Saving accounts | Status of savings (little to rich) | Categorical |
+| Checking account | Status of checking account | Categorical |
+| Credit amount | Requested loan amount (DM) | Numeric |
+| Duration | Loan term in months | Numeric |
+| Purpose | Loan purpose (car, education, etc.) | Categorical |
+| Risk | Good or bad credit risk (target) | Binary |
+
+The dataset exhibits class imbalance, with 70% of applications classified as "good" risk and 30% as "bad" risk. This distribution reflects realistic lending scenarios where defaults are relatively rare events.
+
+## System Architecture
+
+The implementation consists of three primary components:
+
+### Model Training Pipeline
+
+The Jupyter notebook (`explainable_loan_approval_xgboost_optuna.ipynb`) handles data preprocessing, model training, and hyperparameter optimization. The pipeline includes:
+
+1. **Preprocessing**: Numeric features are standardized using z-score normalization; categorical features are one-hot encoded
+2. **Optimization**: Optuna conducts 100 trials of Bayesian optimization over XGBoost hyperparameters
+3. **Evaluation**: Performance is assessed using precision, recall, F1-score, and ROC-AUC on a held-out test set
+4. **Artifact Export**: The trained model, preprocessor, and study results are serialized for deployment
+
+### Backend API
+
+A FastAPI application (`app/`) serves predictions and explanations through a RESTful interface. The API provides:
+
+- `POST /predict`: Returns the approval decision, probability score, and SHAP-based feature attributions
+- `POST /counterfactuals`: Generates DiCE counterfactual recommendations for rejected applications
+- `GET /health`: Reports service status and model availability
+
+The backend is containerized using Docker and deployed to Hugging Face Spaces for public accessibility. The Mangum adapter enables optional deployment to AWS Lambda for serverless operation.
+
+### Frontend Interface
+
+A Next.js web application (`frontend/`) provides an interactive demonstration of the system. Users can input loan application parameters through a form interface and receive:
+
+- The model's binary prediction (Approved/Rejected) with probability
+- A visualization of SHAP feature contributions as a horizontal bar chart
+- For rejected applications, a comparison table showing counterfactual recommendations
+
+The interface is designed with a research presentation aesthetic, emphasizing clarity and interpretability over commercial polish.
+
+## Running the Project
 
 ### Prerequisites
 
-- Python 3.9+
-- pip or conda
+- Python 3.11 or higher
+- Node.js 18 or higher
+- Docker (optional, for containerized deployment)
 
-### Local Setup
-
-1. **Clone the repository**:
-   ```bash
-   git clone <repository-url>
-   cd loan-approval-api
-   ```
-
-2. **Create virtual environment**:
-   ```bash
-   python -m venv venv
-   
-   # Windows
-   venv\Scripts\activate
-   
-   # Linux/macOS
-   source venv/bin/activate
-   ```
-
-3. **Install dependencies**:
-   ```bash
-   pip install -r requirements.txt
-   ```
-
-4. **Add your trained model**:
-   
-   Place your trained sklearn pipeline at `models/xgb_pipeline.pkl`.
-   
-   The pipeline should contain:
-   - `preprocessor`: sklearn ColumnTransformer or similar
-   - `classifier`: XGBoost classifier
-
-## Running Locally
-
-### Using Uvicorn (Development)
+### Backend Setup
 
 ```bash
-uvicorn app.main:app --reload --host 0.0.0.0 --port 8000
+cd counterfactual-explainable-credit-decisions
+
+# Create and activate virtual environment
+python -m venv venv
+source venv/bin/activate  # On Windows: venv\Scripts\activate
+
+# Install dependencies
+pip install -r requirements.txt
+
+# Run the API server
+uvicorn app.main:app --host 0.0.0.0 --port 8000
 ```
 
-### Using Python
+### Frontend Setup
 
 ```bash
-python -m app.main
+cd frontend
+
+# Install dependencies
+npm install
+
+# Run development server
+npm run dev
 ```
 
-The API will be available at `http://localhost:8000`.
+The frontend will be available at `http://localhost:3000` and expects the backend API at the URL specified in `.env.production`.
 
-## API Documentation
+### Docker Deployment
 
-Once running, access the interactive documentation:
-
-- **Swagger UI**: http://localhost:8000/docs
-- **ReDoc**: http://localhost:8000/redoc
-- **OpenAPI JSON**: http://localhost:8000/openapi.json
-
-## API Endpoints
-
-### Health Check
-
-```http
-GET /
+```bash
+# Build and run the backend container
+docker build -t credit-api .
+docker run -p 7860:7860 credit-api
 ```
 
-**Response:**
-```json
-{
-  "status": "healthy"
-}
-```
+## API Reference
 
-### Detailed Health Check
+### Predict Endpoint
 
-```http
-GET /health
-```
-
-**Response:**
-```json
-{
-  "status": "healthy",
-  "model_loaded": true,
-  "feature_count": 15,
-  "version": "1.0.0"
-}
-```
-
-### Predict Loan Approval
-
+**Request:**
 ```http
 POST /predict
 Content-Type: application/json
-```
 
-**Request Body:**
-```json
 {
   "Age": 35,
   "Sex": "male",
@@ -152,7 +153,7 @@ Content-Type: application/json
   "Housing": "own",
   "Saving_accounts": "moderate",
   "Checking_account": "little",
-  "Credit_amount": 5000.0,
+  "Credit_amount": 5000,
   "Duration": 24,
   "Purpose": "car"
 }
@@ -164,279 +165,131 @@ Content-Type: application/json
   "prediction": "Approved",
   "approval_probability": 0.7421,
   "top_positive_factors": [
-    {
-      "feature": "Age",
-      "impact": 0.42,
-      "direction": "positive"
-    },
-    {
-      "feature": "Job",
-      "impact": 0.25,
-      "direction": "positive"
-    }
+    {"feature": "Age", "impact": 0.42, "direction": "positive"},
+    {"feature": "Housing", "impact": 0.18, "direction": "positive"}
   ],
   "top_negative_factors": [
+    {"feature": "Duration", "impact": -0.31, "direction": "negative"}
+  ],
+  "all_feature_impacts": [...]
+}
+```
+
+### Counterfactuals Endpoint
+
+**Request:**
+```http
+POST /counterfactuals
+Content-Type: application/json
+
+{
+  "Age": 25,
+  "Sex": "female",
+  "Job": 1,
+  "Housing": "rent",
+  "Saving_accounts": "little",
+  "Checking_account": "little",
+  "Credit_amount": 8000,
+  "Duration": 48,
+  "Purpose": "car"
+}
+```
+
+**Response:**
+```json
+{
+  "original_prediction": "Rejected",
+  "original_probability": 0.31,
+  "counterfactual_recommendations": [
     {
-      "feature": "Duration",
-      "impact": -0.31,
-      "direction": "negative"
-    },
-    {
-      "feature": "Credit_amount",
-      "impact": -0.15,
-      "direction": "negative"
+      "Credit_amount": 4500,
+      "Duration": 24,
+      "Saving_accounts": "moderate",
+      "Checking_account": "moderate",
+      "prediction": "Approved"
     }
   ],
-  "all_feature_impacts": [
-    {
-      "feature": "Age",
-      "impact": 0.42,
-      "direction": "positive"
-    },
-    {
-      "feature": "Duration",
-      "impact": -0.31,
-      "direction": "negative"
-    }
-  ]
+  "message": "3 counterfactual recommendations generated successfully"
 }
 ```
 
-### Model Information
+## Technical Considerations
 
-```http
-GET /model/info
+### Interpretability vs. Accuracy Trade-offs
+
+This implementation prioritizes interpretability without significantly sacrificing predictive performance. XGBoost achieves competitive accuracy while remaining compatible with SHAP's TreeExplainer, which provides exact (not approximate) Shapley values. More complex models like deep neural networks would require sampling-based approximations that introduce variance into the explanations.
+
+### Limitations of Counterfactual Explanations
+
+Counterfactual recommendations should be understood as model-based suggestions, not guarantees. The recommendations indicate what feature changes would flip the model's prediction, but they do not account for:
+
+- Changes in the applicant's actual creditworthiness
+- Future model updates that might alter decision boundaries
+- Unobserved confounding factors not captured in the training data
+
+Additionally, some suggested changes (like improving savings account status) may not be immediately actionable, even though they are theoretically possible for the applicant to achieve over time.
+
+### Fairness Considerations
+
+While this implementation demonstrates explainability techniques, it does not explicitly address fairness constraints. The German Credit Dataset contains protected attributes (sex, age) that could lead to discriminatory outcomes. Production deployments should incorporate fairness auditing and potentially constrain the model to satisfy demographic parity or equalized odds criteria.
+
+## References
+
+### Explainability Methods
+
+- Lundberg, S. M., & Lee, S. I. (2017). A unified approach to interpreting model predictions. *Advances in Neural Information Processing Systems*, 30. https://github.com/slundberg/shap
+
+- Mothilal, R. K., Sharma, A., & Tan, C. (2020). Explaining machine learning classifiers through diverse counterfactual explanations. *Proceedings of the 2020 Conference on Fairness, Accountability, and Transparency*, 607-617. https://github.com/interpretml/DiCE
+
+### Machine Learning
+
+- Chen, T., & Guestrin, C. (2016). XGBoost: A scalable tree boosting system. *Proceedings of the 22nd ACM SIGKDD International Conference on Knowledge Discovery and Data Mining*, 785-794.
+
+- Akiba, T., Sano, S., Yanase, T., Ohta, T., & Koyama, M. (2019). Optuna: A next-generation hyperparameter optimization framework. *Proceedings of the 25th ACM SIGKDD International Conference on Knowledge Discovery and Data Mining*, 2623-2631.
+
+### Dataset
+
+- Hofmann, H. (1994). Statlog (German Credit Data). UCI Machine Learning Repository. https://archive.ics.uci.edu/ml/datasets/statlog+(german+credit+data)
+
+## Project Structure
+
+```
+├── counterfactual-explainable-credit-decisions/
+│   ├── app/
+│   │   ├── main.py              # FastAPI application
+│   │   ├── schemas.py           # Pydantic models
+│   │   ├── model_loader.py      # Model loading utilities
+│   │   ├── explainability.py    # SHAP explanation generation
+│   │   └── utils.py             # Helper functions
+│   ├── model_artifacts/
+│   │   ├── xgboost_loan_model.pkl
+│   │   └── preprocessor.pkl
+│   ├── training_data.csv
+│   ├── Dockerfile
+│   └── requirements.txt
+├── frontend/
+│   ├── app/
+│   │   ├── page.tsx             # Main application component
+│   │   ├── layout.tsx           # Root layout
+│   │   └── globals.css          # Styling
+│   ├── lib/
+│   │   ├── api.ts               # API client
+│   │   └── types.ts             # TypeScript definitions
+│   └── package.json
+└── plot/                        # Visualization outputs from training
 ```
 
-**Response:**
-```json
-{
-  "loaded": true,
-  "pipeline_steps": ["preprocessor", "classifier"],
-  "feature_count": 15,
-  "classifier_type": "XGBClassifier",
-  "version": "1.0.0"
-}
-```
+## Live Demo
 
-### Feature Information
+The application is deployed and accessible at:
 
-```http
-GET /features
-```
-
-**Response:**
-```json
-{
-  "input_features": ["Age", "Sex", "Job", "Housing", "Saving_accounts", "Checking_account", "Credit_amount", "Duration", "Purpose"],
-  "transformed_feature_count": 15,
-  "feature_descriptions": {
-    "Age": "Applicant's age in years",
-    "Sex": "Applicant's sex (male/female)",
-    "Job": "Job category (0-3)",
-    "Housing": "Housing status (own/rent/free)",
-    "Saving_accounts": "Savings account status",
-    "Checking_account": "Checking account status",
-    "Credit_amount": "Requested credit amount",
-    "Duration": "Loan duration in months",
-    "Purpose": "Purpose of the loan"
-  }
-}
-```
-
-## Input Fields Reference
-
-| Field | Type | Required | Description | Example |
-|-------|------|----------|-------------|---------|
-| Age | integer | Yes | Applicant's age (18-120) | 35 |
-| Sex | string | Yes | "male" or "female" | "male" |
-| Job | integer | Yes | Job category (0-3) | 2 |
-| Housing | string | Yes | "own", "rent", or "free" | "own" |
-| Saving_accounts | string | No | "little", "moderate", "quite rich", "rich", or null | "moderate" |
-| Checking_account | string | No | "little", "moderate", "rich", or null | "little" |
-| Credit_amount | float | Yes | Loan amount requested | 5000.0 |
-| Duration | integer | Yes | Loan duration in months (1-72) | 24 |
-| Purpose | string | Yes | Loan purpose | "car" |
-
-## Docker Usage
-
-### Build the Image
-
-```bash
-docker build -t loan-approval-api .
-```
-
-### Run the Container
-
-```bash
-docker run -p 8000:8000 loan-approval-api
-```
-
-### With Custom Model Path
-
-```bash
-docker run -p 8000:8000 \
-  -v /path/to/your/model:/app/models \
-  -e MODEL_PATH=/app/models/your_model.pkl \
-  loan-approval-api
-```
-
-### Development Mode
-
-```bash
-docker build --target development -t loan-approval-api:dev .
-docker run -p 8000:8000 -v $(pwd)/app:/app/app loan-approval-api:dev
-```
-
-## AWS Lambda Deployment
-
-The application includes Mangum integration for seamless AWS Lambda deployment.
-
-### Lambda Handler
-
-The handler is already configured in `app/main.py`:
-
-```python
-from mangum import Mangum
-handler = Mangum(app, lifespan="auto")
-```
-
-### Deployment Steps
-
-1. **Package the application**:
-   ```bash
-   pip install -r requirements.txt -t package/
-   cp -r app package/
-   cp -r models package/
-   cd package && zip -r ../deployment.zip .
-   ```
-
-2. **Create Lambda function**:
-   - Runtime: Python 3.11
-   - Handler: `app.main.handler`
-   - Memory: 512MB+ (for SHAP computations)
-   - Timeout: 30 seconds
-
-3. **Configure API Gateway**:
-   - Create HTTP API or REST API
-   - Configure routes to Lambda integration
-   - Enable CORS if needed
-
-### Environment Variables
-
-| Variable | Description | Default |
-|----------|-------------|---------|
-| MODEL_PATH | Path to the model file | `./models/xgb_pipeline.pkl` |
-
-## Testing with curl
-
-### Health Check
-
-```bash
-curl http://localhost:8000/
-```
-
-### Make a Prediction
-
-```bash
-curl -X POST http://localhost:8000/predict \
-  -H "Content-Type: application/json" \
-  -d '{
-    "Age": 35,
-    "Sex": "male",
-    "Job": 2,
-    "Housing": "own",
-    "Saving_accounts": "moderate",
-    "Checking_account": "little",
-    "Credit_amount": 5000.0,
-    "Duration": 24,
-    "Purpose": "car"
-  }'
-```
-
-### Using PowerShell
-
-```powershell
-$body = @{
-    Age = 35
-    Sex = "male"
-    Job = 2
-    Housing = "own"
-    Saving_accounts = "moderate"
-    Checking_account = "little"
-    Credit_amount = 5000.0
-    Duration = 24
-    Purpose = "car"
-} | ConvertTo-Json
-
-Invoke-RestMethod -Uri "http://localhost:8000/predict" -Method Post -Body $body -ContentType "application/json"
-```
-
-## Understanding SHAP Explanations
-
-### What are SHAP Values?
-
-SHAP (SHapley Additive exPlanations) values explain how each feature contributes to pushing the prediction away from the base rate:
-
-- **Positive SHAP value**: Feature pushes toward loan approval
-- **Negative SHAP value**: Feature pushes toward loan rejection
-- **Magnitude**: Larger absolute values indicate stronger influence
-
-### Example Interpretation
-
-```json
-{
-  "feature": "Age",
-  "impact": 0.42,
-  "direction": "positive"
-}
-```
-
-This means:
-- The applicant's age contributed **+0.42** to the log-odds of approval
-- Higher age (in this case) **increases** the likelihood of approval
-
-## Error Handling
-
-The API returns structured error responses:
-
-```json
-{
-  "detail": "Error message describing what went wrong"
-}
-```
-
-Common HTTP status codes:
-- `200`: Successful prediction
-- `400`: Invalid input data
-- `500`: Internal server error
-- `503`: Model not loaded/available
-
-## Performance Considerations
-
-- **Model Loading**: Models are cached at startup to avoid per-request loading
-- **SHAP Computation**: TreeExplainer is optimized for tree-based models
-- **Memory**: SHAP computations require additional memory; allocate 512MB+ for Lambda
-
-## Security Notes
-
-- Configure CORS appropriately for production
-- Never expose sensitive model information in error messages
-- Use HTTPS in production
-- Implement rate limiting for public APIs
-- Consider authentication for production deployments
+- **Frontend**: Deployed via Vercel
+- **Backend API**: https://huggingface.co/spaces/Himash946/counterfactual-explainable-credit-decisions
 
 ## License
 
-MIT License - See LICENSE file for details.
+This project is released under the MIT License.
 
-## Contributing
+## Acknowledgments
 
-1. Fork the repository
-2. Create a feature branch
-3. Make your changes
-4. Submit a pull request
-
-## Support
-
-For issues and questions, please open a GitHub issue.
+This work was developed as a research demonstration of explainable AI techniques in financial applications. The implementation draws on established open-source libraries and publicly available datasets to illustrate how modern machine learning systems can be made more transparent and accountable.
